@@ -35,6 +35,14 @@ async function getIssues() {
         page++;
     }
 
+    const deployTag = process.env.DEPLOY_TAG?.toLowerCase();
+
+    issues = issues.filter(issue =>
+        issue.tags?.some(tag =>
+            tag.name.toLowerCase() === deployTag
+        )
+    );
+
     return issues;
 }
 
