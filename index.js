@@ -17,10 +17,14 @@ async function getIssues() {
 
     while (true) {
 
+        const search = process.env.PROJECT_ID
+            ? `status:FOR DEPLOYMENT,clientId:${process.env.CLIENT_ID},projectId:${process.env.PROJECT_ID}`
+            : `status:FOR DEPLOYMENT,clientId:${process.env.CLIENT_ID}`;
+
         const { data } = await api.get("/dev/issues", {
             params: {
                 includes: "assignees,tags,comments",
-                search: `status:FOR DEPLOYMENT,clientId:${process.env.CLIENT_ID}`,
+                search,
                 page,
                 sort: "updatedAt:desc"
             }
