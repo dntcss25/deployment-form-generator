@@ -3,7 +3,6 @@ require("dotenv").config();
 
 const axios = require("axios");
 const ExcelJS = require("exceljs");
-const fs = require("fs");
 const path = require("path");
 const readline = require("readline/promises");
 
@@ -418,27 +417,27 @@ async function generateExcel(app, deployTag, issues) {
         }
     }
 
-    // Create output directory
-    const outputDir = path.join(__dirname, "output");
-    fs.mkdirSync(outputDir, { recursive: true });
-
-    // Generate filename
     const tagLabel = deployTag ?? "ALL";
     const filename =
         `${app.name}_${tagLabel}_Deployment_Report.xlsx`;
+    const buffer = await workbook.xlsx.writeBuffer();
 
-    const outputPath = path.join(outputDir, filename);
+    return { buffer, filename, issueCount: issues.length };
+}
 
-    // Generate Excel file
-    await workbook.xlsx.writeFile(outputPath);
+async function generateDeploymentReport(appName, deployTag) {
+    if (!process.env.TOKEN) {
+        throw new Error("Missing TOKEN in .env");
+    }
 
-    console.log("\n========== REPORT GENERATED ==========");
-    console.log(`Application : ${app.name}`);
-    console.log(`Client ID   : ${app.clientId}`);
-    console.log(`Deploy Tag  : ${tagLabel}`);
-    console.log(`Total Issues: ${issues.length}`);
-    console.log(`Unique Projects: ${triggeredProjects.length}`);
-    console.log(`Output File : ${outputPath}`);
+    const app = APPLICATIONS[appName];
+    if (!app) throw new Error("Unsupported application.");
+    if (!["PROD", "STAGING", null].includes(deployTag)) {
+        throw new Error("Unsupported deployment tag.");
+    }
+
+    const issues = await getIssues({ name: appName, ...app }, deployTag);
+    return generateExcel({ name: appName, ...app }, deployTag, issues);
 }
 
 
@@ -458,9 +457,18 @@ async function main() {
 
         console.log("\nFetching deployment issues...");
 
-        const issues = await getIssues(app, deployTag);
+        const { buffer, filename, issueCount } = await generateDeploymentReport(app.name, deployTag);
+        const outputDir = path.join(__dirname, "output");
+        require("fs").mkdirSync(outputDir, { recursive: true });
+        const outputPath = path.join(outputDir, filename);
+        require("fs").writeFileSync(outputPath, buffer);
 
-        await generateExcel(app, deployTag, issues);
+        console.log("\n========== REPORT GENERATED ==========");
+        console.log(`Application : ${app.name}`);
+        console.log(`Client ID   : ${app.clientId}`);
+        console.log(`Deploy Tag  : ${deployTag ?? "ALL"}`);
+        console.log(`Total Issues: ${issueCount}`);
+        console.log(`Output File : ${outputPath}`);
     } catch (error) {
         console.error(
             "\nFailed to generate report:",
@@ -472,4 +480,6 @@ async function main() {
     }
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { generateDeploymentReport };
