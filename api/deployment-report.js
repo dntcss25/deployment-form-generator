@@ -24,7 +24,7 @@ module.exports = async function handler(request, response) {
     }
 
     const { application, tag } = request.body ?? {};
-    if (!application || !["PROD", "STAGING", "ALL"].includes(tag)) {
+    if (!application || !["PROD", "STAGING", "CLOUD", "ALL"].includes(tag)) {
         response.status(400).json({ error: "Choose an application and deployment tag." });
         return;
     }

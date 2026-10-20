@@ -41,7 +41,7 @@ const server = http.createServer(async (request, response) => {
         }
 
         const { application, tag } = JSON.parse(rawBody || "{}");
-        if (!application || !["PROD", "STAGING", "ALL"].includes(tag)) {
+        if (!application || !["PROD", "STAGING", "CLOUD", "ALL"].includes(tag)) {
             response.writeHead(400, { "Content-Type": "application/json" });
             response.end(JSON.stringify({ error: "Choose an application and deployment tag." }));
             return;

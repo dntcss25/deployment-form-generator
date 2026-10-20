@@ -74,18 +74,20 @@ async function selectDeployTag(rl) {
     console.log("\n========== SELECT DEPLOY TAG ==========");
     console.log("1. PROD");
     console.log("2. STAGING");
-    console.log("3. NONE (all tags)");
+    console.log("3. CLOUD (DEV and CLOUD tags)");
+    console.log("4. NONE (all tags)");
 
     const tagOptions = {
         "1": "PROD",
         "2": "STAGING",
-        "3": null
+        "3": "CLOUD",
+        "4": null
     };
 
     while (true) {
         const answer = (
             await rl.question(
-                "\nSelect deployment tag (1-3): "
+                "\nSelect deployment tag (1-4): "
             )
         ).trim();
 
@@ -93,7 +95,7 @@ async function selectDeployTag(rl) {
             return tagOptions[answer];
         }
 
-        console.log("Invalid selection. Please choose 1, 2, or 3.");
+        console.log("Invalid selection. Please choose 1, 2, 3, or 4.");
     }
 }
 
@@ -136,9 +138,10 @@ async function getIssues(app, deployTag) {
     // Filter by tag only when a specific tag was selected.
     // NONE means all tags, including issues without tags.
     if (deployTag !== null) {
+        const acceptedTags = deployTag === "CLOUD" ? ["DEV", "CLOUD"] : [deployTag];
         return issues.filter(issue =>
             issue.tags?.some(tag =>
-                tag.name?.toLowerCase() === deployTag.toLowerCase()
+                acceptedTags.some(acceptedTag => tag.name?.toLowerCase() === acceptedTag.toLowerCase())
             )
         );
     }
@@ -309,17 +312,21 @@ function collectTriggeredProjects(issues, appName) {
             );
 
             for (const mr of mergeRequests) {
-                // One row per unique full repository path.
-                if (!projects.has(mr.projectPath)) {
-                    projects.set(mr.projectPath, {
+                // Forks can have different paths but refer to the same project
+                // image, so list each application/image pair only once.
+                const projectKey = `${mr.application}:${mr.image}`.toLowerCase();
+                if (!projects.has(projectKey)) {
+                    projects.set(projectKey, {
                         application: mr.application,
                         image: mr.image,
-                        projectPath: mr.projectPath,
+                        projectPaths: new Set(),
                         mergeRequests: new Set()
                     });
                 }
 
-                projects.get(mr.projectPath).mergeRequests.add(mr.url);
+                const project = projects.get(projectKey);
+                project.projectPaths.add(mr.projectPath);
+                project.mergeRequests.add(mr.url);
             }
         }
     }
@@ -392,7 +399,7 @@ async function generateExcel(app, deployTag, issues) {
 
         // Store project path and unique MR links in the IMAGE cell note
         row.getCell(2).note = [
-            `Project Path: ${project.projectPath}`,
+            `Project Path${project.projectPaths.size > 1 ? "s" : ""}: ${[...project.projectPaths].join(", ")}`,
             `Unique MR Count: ${project.mergeRequests.size}`,
             ...project.mergeRequests
         ].join("\n");
@@ -439,7 +446,7 @@ async function generateDeploymentReport(appName, deployTag) {
 
     const app = APPLICATIONS[appName];
     if (!app) throw new Error("Unsupported application.");
-    if (!["PROD", "STAGING", null].includes(deployTag)) {
+    if (!["PROD", "STAGING", "CLOUD", null].includes(deployTag)) {
         throw new Error("Unsupported deployment tag.");
     }
 
