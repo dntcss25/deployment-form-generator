@@ -263,7 +263,7 @@ function extractTaggedSections(text = "") {
 }
 
 
-function extractMergeRequests(text = "") {
+function extractMergeRequests(text = "", appName) {
     const regex =
         /https?:\/\/git\.centralizedinc\.com\/([^\s"'<>()[\]]+?)\/-\/merge_requests\/(\d+)/gi;
 
@@ -273,16 +273,22 @@ function extractMergeRequests(text = "") {
     while ((match = regex.exec(text)) !== null) {
         const projectPath = match[1].replace(/\/+$/, "");
         const pathParts = projectPath.split("/");
-        const application = pathParts
-            .map(part => part.toLowerCase())
-            .find(part => ["cms", "hris", "lms"].includes(part));
+        const image = pathParts[pathParts.length - 1];
+        const application = appName === "MSUG"
+            ? image.match(/^(cms|lms)(?:[-_]|$)/i)?.[1]
+            : pathParts
+                .map(part => part.toLowerCase())
+                .find(part => ["cms", "hris", "lms"].includes(part));
 
+        // MSUG names its repositories with the application prefix (for
+        // example, cms-management-service); other apps use the existing
+        // cms/hris/lms path segment convention.
         if (!application) continue;
 
         mergeRequests.push({
             projectPath,
             application: application.toUpperCase(),
-            image: pathParts[pathParts.length - 1],
+            image,
             mrNumber: match[2],
             url: match[0].replace(/[.,;]+$/, "")
         });
@@ -292,13 +298,14 @@ function extractMergeRequests(text = "") {
 }
 
 
-function collectTriggeredProjects(issues) {
+function collectTriggeredProjects(issues, appName) {
     const projects = new Map();
 
     for (const issue of issues) {
         for (const comment of issue.comments ?? []) {
             const mergeRequests = extractMergeRequests(
-                comment.comment ?? ""
+                comment.comment ?? "",
+                appName
             );
 
             for (const mr of mergeRequests) {
@@ -363,7 +370,7 @@ async function generateExcel(app, deployTag, issues) {
     }
 
     // Collect unique repositories from MR links
-    const triggeredProjects = collectTriggeredProjects(issues);
+    const triggeredProjects = collectTriggeredProjects(issues, app.name);
 
     // Add triggered projects summary
     sheet.addRow([]);
